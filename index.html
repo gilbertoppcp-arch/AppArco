@@ -751,28 +751,65 @@ async function appConnectGS(){
   const url=document.getElementById('appScriptUrl').value.trim();
   const st=document.getElementById('appGsStatus');
   if(!url||!url.includes('script.google.com')){st.textContent='⚠ URL inválida';st.className='upload-status-app err';return;}
-  st.textContent='⏳ Conectando...';st.className='upload-status-app';
+  st.textContent='⏳ Conectando ao Google Sheets...';st.className='upload-status-app';
   try{
-    const resp=await fetch(url);if(!resp.ok)throw new Error('HTTP '+resp.status);
-    const json=await resp.json();if(json.status==='error')throw new Error(json.message);
+    // Usar no-cors não funciona para leitura — precisamos da URL com ?callback para JSONP
+    // ou simplesmente fazer o fetch normal (o Apps Script com "Qualquer pessoa" permite CORS)
+    const resp=await fetch(url, {
+      method: 'GET',
+      mode: 'cors',
+      redirect: 'follow',
+      headers: { 'Accept': 'application/json' }
+    });
+    if(!resp.ok)throw new Error('Erro HTTP '+resp.status);
+    const text=await resp.text();
+    let json;
+    try{ json=JSON.parse(text); }
+    catch(e){ throw new Error('Resposta inválida do servidor. Verifique se o script está implantado corretamente.'); }
+    if(json.status==='error')throw new Error(json.message);
+    if(!json.rows||!json.rows.length)throw new Error('Nenhum dado retornado. Verifique o nome da aba no script (NOME_ABA).');
+    st.textContent='⏳ Processando '+json.totalRows.toLocaleString('pt-BR')+' registros...';
     const payload=appBuildPayload(json.rows);
     appLoadPayload(payload);appRender();
     localStorage.setItem('arco_script_url',url);
-    st.textContent='✔ '+json.totalRows.toLocaleString('pt-BR')+' registros!';st.className='upload-status-app ok';
+    st.textContent='✔ '+json.totalRows.toLocaleString('pt-BR')+' registros carregados!';
+    st.className='upload-status-app ok';
     document.getElementById('appOnlineBadge').innerHTML='<span class="hdr-badge"><span class="online-dot"></span>Online</span>';
-    const now=new Date();document.getElementById('appHdrSub').textContent=`🔗 ${now.toLocaleTimeString('pt-BR')} · ${json.totalRows.toLocaleString('pt-BR')} reg.`;
-    setTimeout(()=>{closeDrawer();},1500);
-  }catch(err){st.textContent='❌ '+err.message;st.className='upload-status-app err';}
+    const now=new Date();
+    document.getElementById('appHdrSub').textContent='🔗 '+now.toLocaleTimeString('pt-BR')+' · '+json.totalRows.toLocaleString('pt-BR')+' reg.';
+    setTimeout(()=>{closeDrawer();},2000);
+  }catch(err){
+    st.textContent='❌ '+err.message;
+    st.className='upload-status-app err';
+    console.error('Erro GS:', err);
+  }
 }
 
 async function appAutoConnect(){
-  const url=localStorage.getItem('arco_script_url');if(!url)return;
+  const url=localStorage.getItem('arco_script_url');
+  if(!url)return;
   document.getElementById('appScriptUrl').value=url;
+  document.getElementById('appGsStatus').textContent='⏳ Reconectando...';
   try{
-    const resp=await fetch(url);const json=await resp.json();
-    if(json.status==='ok'){const payload=appBuildPayload(json.rows);appLoadPayload(payload);appRender();document.getElementById('appOnlineBadge').innerHTML='<span class="hdr-badge"><span class="online-dot"></span>Online</span>';}
-  }catch(e){}
+    const resp=await fetch(url,{method:'GET',mode:'cors',redirect:'follow'});
+    const text=await resp.text();
+    const json=JSON.parse(text);
+    if(json.status==='ok'&&json.rows&&json.rows.length){
+      const payload=appBuildPayload(json.rows);
+      appLoadPayload(payload);appRender();
+      document.getElementById('appOnlineBadge').innerHTML='<span class="hdr-badge"><span class="online-dot"></span>Online</span>';
+      const now=new Date();
+      document.getElementById('appHdrSub').textContent='🔗 '+now.toLocaleTimeString('pt-BR')+' · '+json.totalRows.toLocaleString('pt-BR')+' reg.';
+      document.getElementById('appGsStatus').textContent='✔ Conectado!';
+      document.getElementById('appGsStatus').className='upload-status-app ok';
+    }
+  }catch(e){
+    document.getElementById('appGsStatus').textContent='⚠ Sem conexão — usando dados locais';
+    console.warn('AutoConnect falhou:',e);
+  }
 }
+
+
 
 // ── Init ──────────────────────────────────────────────────────────────────
 appLoadPayload(APP_PAYLOAD);
