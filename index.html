@@ -575,9 +575,10 @@ function appRender(){
     </div>`;
   });
 
-  // Tipo acabamento
-  const acabCnt=grpCnt(data,19);
-  const acabEntries=Object.entries(acabCnt).map(([i,v])=>[D.tipo_acabs[+i]||'',v]).filter(e=>e[0]).sort((a,b)=>b[1]-a[1]);
+  // Tipo acabamento — soma da tiragem por tipo
+  const acabMap={};
+  data.forEach(r=>{const k=r[19];if(k)acabMap[k]=(acabMap[k]||0)+(r[12]||0);});
+  const acabEntries=Object.entries(acabMap).map(([i,v])=>[D.tipo_acabs[+i]||'',v]).filter(e=>e[0]).sort((a,b)=>b[1]-a[1]);
   const acabTotal=acabEntries.reduce((s,e)=>s+e[1],0);
   const acabColors=ACAB_COLORS.slice(0,acabEntries.length);
   if(appCharts['aCAcab'])appCharts['aCAcab'].destroy();
