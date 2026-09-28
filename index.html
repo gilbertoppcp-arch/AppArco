@@ -295,10 +295,12 @@ tbody td{padding:7px 10px;border-bottom:1px solid #f0f2f5}
   <div class="kpi-grid">
     <div class="kpi-card"><div class="kpi-lbl">Total itens</div><div class="kpi-val" id="aKTotal">—</div><div class="kpi-sub" id="aKTotalSub"></div></div>
     <div class="kpi-card"><div class="kpi-lbl">Tiragem total</div><div class="kpi-val" id="aKTir">—</div><div class="kpi-sub" id="aKTirSub"></div></div>
-    <div class="kpi-card g"><div class="kpi-lbl">Qtde faturada</div><div class="kpi-val" id="aKFat">—</div><div class="kpi-sub" id="aKFatSub"></div></div>
-    <div class="kpi-card p"><div class="kpi-lbl">% faturamento</div><div class="kpi-val" id="aKPerc">—</div><div class="kpi-sub">eficiência</div></div>
-    <div class="kpi-card r"><div class="kpi-lbl">Quebra</div><div class="kpi-val" id="aKQuebra">—</div><div class="kpi-sub" id="aKQuebraSub"></div></div>
+    <div class="kpi-card g"><div class="kpi-lbl">Qtde finalizada</div><div class="kpi-val" id="aKFat">—</div><div class="kpi-sub" id="aKFatSub"></div></div>
+    <div class="kpi-card p"><div class="kpi-lbl">% finalizada</div><div class="kpi-val" id="aKPerc">—</div><div class="kpi-sub" id="aKPercSub"></div></div>
+    <div class="kpi-card r"><div class="kpi-lbl">Em produção</div><div class="kpi-val" id="aKQuebra">—</div><div class="kpi-sub" id="aKQuebraSub"></div></div>
     <div class="kpi-card a"><div class="kpi-lbl">CDs atendidos</div><div class="kpi-val" id="aKCDs">—</div><div class="kpi-sub" id="aKCDsNomes" style="word-break:break-word;line-height:1.4"></div></div>
+    <div class="kpi-card" style="border-top-color:#1e8a5e"><div class="kpi-lbl">Forecast</div><div class="kpi-val" id="aKForecast" style="color:#1e8a5e;font-size:15px">—</div><div class="kpi-sub" id="aKForecastSub"></div></div>
+    <div class="kpi-card" style="border-top-color:#2d5fa6"><div class="kpi-lbl">Faturamento</div><div class="kpi-val" id="aKFatVal" style="color:#2d5fa6;font-size:15px">—</div><div class="kpi-sub" id="aKFatValSub"></div><div id="aKFatDiff" style="font-size:11px;font-weight:700;margin-top:2px"></div></div>
   </div>
 
   <div class="sec">Produção</div>
@@ -468,7 +470,15 @@ function appClearFilters(){
 // ── Utilitários ───────────────────────────────────────────────────────────
 const fmtN=n=>n>=1e6?(n/1e6).toFixed(2).replace('.',',')+' M':n>=1e3?(n/1e3).toFixed(0)+' K':Math.round(n).toLocaleString('pt-BR');
 const pct=(a,b)=>b>0?((a/b)*100).toFixed(1)+'%':'—';
+const fmtBRL=v=>'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 const sumF=(arr,i)=>arr.reduce((s,r)=>s+(r[i]||0),0);
+function isFinalizado(r){
+  const D=APP_DICTS;
+  const imp=(D.imps&&D.imps[r[7]])||'';
+  const acb=(D.acbs&&D.acbs[r[8]])||'';
+  const ins=(D.inss&&D.inss[r[9]])||'';
+  return imp==='FINALIZADO'&&acb==='FINALIZADO'&&ins==='FINALIZADO';
+}
 const cntV=(arr,i,v)=>arr.filter(r=>r[i]===v).length;
 const grpCnt=(arr,i)=>{const m={};arr.forEach(r=>{const k=r[i];if(k)m[k]=(m[k]||0)+1;});return m;};
 const ACAB_COLORS=['#2E75B6','#1D7A4A','#7030A0','#E26B0A','#C00000','#3DA0D0','#E8A838','#595959','#A52A2A','#008080','#FF69B4'];
@@ -545,20 +555,38 @@ function appRender(){
   const data=appGetFiltered(),n=data.length,N=APP_ALL.length,D=APP_DICTS;
   document.getElementById('appHdrSub').textContent=`${n.toLocaleString('pt-BR')} de ${N.toLocaleString('pt-BR')} reg.`;
 
-  const tir=sumF(data,12),tirN=sumF(APP_ALL,12),fat=sumF(data,13),fatN=sumF(APP_ALL,13);
-  const qbr=sumF(data,14),qbrN=sumF(APP_ALL,14);
+  const tir=sumF(data,12),tirN=sumF(APP_ALL,12);
+  // "Qtde finalizada"/"% finalizada"/"Em produção" refletem status real de
+  // produção (Impressão+Acabamento+Inspeção=FINALIZADO), não faturamento.
+  const fat=data.filter(isFinalizado).reduce((s,r)=>s+(r[12]||0),0);
+  const qbr=tir-fat;
   const cdsSet=new Set(data.map(r=>r[1]).filter(Boolean));
   document.getElementById('aKTotal').textContent=n.toLocaleString('pt-BR');
   document.getElementById('aKTotalSub').textContent=pct(n,N)+' do total';
   document.getElementById('aKTir').textContent=Math.round(tir).toLocaleString('pt-BR');
   document.getElementById('aKTirSub').textContent=pct(tir,tirN)+' do total';
   document.getElementById('aKFat').textContent=Math.round(fat).toLocaleString('pt-BR');
-  document.getElementById('aKFatSub').textContent=pct(fat,fatN)+' do total';
+  document.getElementById('aKFatSub').textContent=pct(fat,tir)+' da tiragem';
   document.getElementById('aKPerc').textContent=tir>0?((fat/tir)*100).toFixed(1)+'%':'—';
   document.getElementById('aKQuebra').textContent=Math.round(qbr).toLocaleString('pt-BR');
-  document.getElementById('aKQuebraSub').textContent=pct(qbr,qbrN)+' do total';
+  document.getElementById('aKQuebraSub').textContent=pct(qbr,tir)+' da tiragem';
   document.getElementById('aKCDs').textContent=cdsSet.size;
   document.getElementById('aKCDsNomes').textContent=[...cdsSet].map(i=>D.cds[i]||'').filter(Boolean).sort().join(' · ');
+
+  // Forecast, Faturamento e diferença
+  const fatVal=data.reduce((s,r)=>s+(r[28]||0),0);
+  const forecastVal=data.reduce((s,r)=>s+(r[29]||0),0);
+  document.getElementById('aKForecast').textContent=forecastVal>0?fmtBRL(forecastVal):'—';
+  document.getElementById('aKForecastSub').textContent=forecastVal>0?'100%':'';
+  document.getElementById('aKFatVal').textContent=fatVal>0?fmtBRL(fatVal):'—';
+  document.getElementById('aKFatValSub').textContent=forecastVal>0?pct(fatVal,forecastVal)+' do forecast':'';
+  const aKFatDiffEl=document.getElementById('aKFatDiff');
+  if(forecastVal>0){
+    const diff=fatVal-forecastVal;
+    if(Math.abs(diff)<0.005){aKFatDiffEl.textContent='';}
+    else if(diff>0){aKFatDiffEl.textContent='+'+fmtBRL(diff);aKFatDiffEl.style.color='#1D7A4A';}
+    else{aKFatDiffEl.textContent='−'+fmtBRL(Math.abs(diff));aKFatDiffEl.style.color='#C00000';}
+  }else{aKFatDiffEl.textContent='';}
 
   // Produção
   const prods=[{lbl:'Impressão',i:7,dict:D.imps},{lbl:'Acabamento',i:8,dict:D.acbs},{lbl:'Inspeção',i:9,dict:D.inss},{lbl:'Nº Pedido',i:24,dict:D.peds}];
@@ -718,6 +746,7 @@ function appBuildPayload(raw){
   Object.keys(raw[0]).forEach(k=>{colMap[k.trim().toUpperCase()]=k;colMap[normalize(k.trim())]=k;});
   const get=(row,...names)=>{for(const n of names){const k=colMap[n.toUpperCase()]||colMap[normalize(n)];if(k!==undefined)return row[k];}return '';};
   const num=v=>{const n=parseFloat(v);return isNaN(n)?0:Math.round(Math.abs(n));};
+  const numF=v=>{const n=parseFloat(String(v).replace(',','.'));return isNaN(n)?0:Math.abs(n);};
   const clean=v=>String(v||'').trim();
   const uniqS=fn=>[...new Set(raw.map(fn).map(clean).filter(Boolean))].sort();
   const chamados=['',...uniqS(r=>clean(get(r,'CHAMADO'))).sort((a,b)=>(a.length-b.length)||a.localeCompare(b))];
@@ -742,7 +771,7 @@ function appBuildPayload(raw){
     const opItem=String(get(r,'OP DO ITEM','OP do Item')||'').replace(/\.0$/,'');
     const pedV=clean(get(r,'Nº PEDIDO','N PEDIDO','NUM PEDIDO','NUMERO PEDIDO'));
     const pedIdx=!pedV?0:pedV.toUpperCase()==='FALTA OC'?peds.indexOf('EM PRODUÇÃO'):peds.indexOf('FINALIZADO');
-    return [idx(chamados,get(r,'CHAMADO')),idx(cds,get(r,'CD')),idx(marcas,get(r,'MARCA')),idx(tipos,get(r,'TIPO')),idx(stats,get(r,'STATUS')),idx(ops,get(r,'STATUS OP')),idx(ents,get(r,'STATUS ENTREGA')),idx(imps,get(r,'IMPRESSÃO','IMPRESSAO')),idx(acbs,get(r,'ACABAMENTO')),idx(inss,get(r,'INSPEÇÃO','INSPECAO','KIT | INSPEÇÃO')),idx(mots,get(r,'MOTIVO ATRASO')),idx(resps,get(r,'RESPONSÁVEL ATRASO','RESPONSAVEL ATRASO')),num(get(r,'TIRAGEM')),num(get(r,'QTE FAT.','QTE FAT')),num(get(r,'QUEBRA_PROD','QUEBRA PROD')),dia,mes,ano,idx(series,get(r,'2. INF_Série','SERIE')),idx(tipo_acabs,get(r,'TIPO ACABAMENTO')),idx(op_kits,opKit),idx(op_items,opItem),clean(get(r,'Código Kit','CODIGO KIT')).slice(0,30),clean(get(r,'Código SKU','CODIGO SKU')).slice(0,30),pedIdx,dp_d,dp_m,dp_y];
+    return [idx(chamados,get(r,'CHAMADO')),idx(cds,get(r,'CD')),idx(marcas,get(r,'MARCA')),idx(tipos,get(r,'TIPO')),idx(stats,get(r,'STATUS')),idx(ops,get(r,'STATUS OP')),idx(ents,get(r,'STATUS ENTREGA')),idx(imps,get(r,'IMPRESSÃO','IMPRESSAO')),idx(acbs,get(r,'ACABAMENTO')),idx(inss,get(r,'INSPEÇÃO','INSPECAO','KIT | INSPEÇÃO')),idx(mots,get(r,'MOTIVO ATRASO')),idx(resps,get(r,'RESPONSÁVEL ATRASO','RESPONSAVEL ATRASO')),num(get(r,'TIRAGEM')),num(get(r,'QTE FAT.','QTE FAT')),num(get(r,'QUEBRA_PROD','QUEBRA PROD')),dia,mes,ano,idx(series,get(r,'2. INF_Série','SERIE')),idx(tipo_acabs,get(r,'TIPO ACABAMENTO')),idx(op_kits,opKit),idx(op_items,opItem),clean(get(r,'Código Kit','CODIGO KIT')).slice(0,30),clean(get(r,'Código SKU','CODIGO SKU')).slice(0,30),pedIdx,dp_d,dp_m,dp_y,numF(get(r,'FATURAMENTO','Faturamento','VALOR FATURADO')),numF(get(r,'FORECAST','Forecast','VALOR FORECAST'))];
   });
   return {chamados,cds,marcas,tipos,statuses:stats,ops,ents,imps,acbs,inss,peds,mots,resps,meses:MESES,anos,series,tipo_acabs,op_kits,op_items,rows};
 }
